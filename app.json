@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "80294776-6878-4c9d-83fb-1f1b9e344589"
+      }
+    },
+    "android": {
+      "package": "com.parthiksalat.backend"
+    },
+    "ios": {
+      "bundleIdentifier": "y",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
