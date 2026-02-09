@@ -1,46 +1,80 @@
-const { Expo } = require("expo-server-sdk");
+const admin = require('firebase-admin');
 
-const expo = new Expo();
+// Initialize Firebase Admin (if not already initialized)
+if (!admin.apps.length) {
+  try {
+    const serviceAccount = require('../../firebase-service-account.json');
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    console.log('✅ Firebase Admin initialized');
+  } catch (error) {
+    console.error('⚠️ Firebase Admin not initialized:', error.message);
+  }
+}
 
 async function sendPushNotification(tokens, title, body, extraData = {}) {
-  console.log('🔔 sendPushNotification called with:', { tokensCount: tokens.length, title, body, extraData });
-  const messages = [];
+  console.log('🔔 sendPushNotification called with:', { tokensCount: tokens.length, title, body });
+  
+  if (!tokens || tokens.length === 0) {
+    console.log('⚠️ No tokens provided');
+    return;
+  }
 
-  for (let token of tokens) {
-    if (!Expo.isExpoPushToken(token)) {
-      console.log('❌ Invalid token format:', token);
-      continue;
-    }
-
-    console.log('✅ Valid token:', token);
-    messages.push({
-      to: token,
-      sound: "default",
-      title,
-      body,
+  try {
+    const message = {
+      notification: {
+        title,
+        body,
+      },
       data: {
         type: 'message',
         timestamp: new Date().toISOString(),
         ...extraData,
       },
-      badge: 1,
-      priority: 'high',
+      android: {
+        priority: 'high',
+        notification: {
+          sound: 'default',
+          channelId: 'default',
+        },
+      },
+      apns: {
+        headers: {
+          'apns-priority': '10',
+        },
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+    };
+
+    // Send to multiple tokens
+    const response = await admin.messaging().sendMulticast({
+      ...message,
+      tokens,
     });
-  }
 
-  console.log('📨 Prepared', messages.length, 'messages to send');
+    console.log('✅ Firebase notifications sent:');
+    console.log('   Success:', response.successCount);
+    console.log('   Failed:', response.failureCount);
 
-  const chunks = expo.chunkPushNotifications(messages);
-  console.log('📦 Split into', chunks.length, 'chunks');
-
-  for (let chunk of chunks) {
-    try {
-      console.log('📤 Sending chunk with', chunk.length, 'messages');
-      const result = await expo.sendPushNotificationsAsync(chunk);
-      console.log('✅ Chunk sent successfully:', result);
-    } catch (error) {
-      console.error('❌ Error sending chunk:', error);
+    // Log failed tokens
+    if (response.failureCount > 0) {
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          console.log('❌ Failed token:', tokens[idx], resp.error.message);
+        }
+      });
     }
+
+    return response;
+  } catch (error) {
+    console.error('❌ Firebase notification error:', error);
+    throw error;
   }
 }
 
